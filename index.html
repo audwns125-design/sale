@@ -1,0 +1,1670 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>가격 추적기 — 쿠팡 · 네이버스토어</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --bg: #0d0f14;
+  --bg2: #141720;
+  --bg3: #1c2030;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.12);
+  --text: #e8eaf0;
+  --text2: #8b90a0;
+  --text3: #555b6e;
+  --green: #00d68f;
+  --green-dim: rgba(0,214,143,0.12);
+  --red: #ff5c5c;
+  --red-dim: rgba(255,92,92,0.12);
+  --blue: #4d9fff;
+  --blue-dim: rgba(77,159,255,0.12);
+  --amber: #ffb347;
+  --amber-dim: rgba(255,179,71,0.1);
+  --coupang: #ff6b35;
+  --naver: #03c75a;
+  --font: 'Noto Sans KR', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --radius: 10px;
+  --radius-lg: 14px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* ── Layout ── */
+.app { display: flex; height: 100vh; overflow: hidden; }
+
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.sidebar-logo {
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.3px;
+  margin-bottom: 3px;
+}
+
+.logo-sub {
+  font-size: 11px;
+  color: var(--text3);
+  letter-spacing: 0.5px;
+}
+
+.store-pills {
+  display: flex;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.pill {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 20px;
+}
+
+.pill-coupang { background: rgba(255,107,53,0.15); color: var(--coupang); }
+.pill-naver { background: rgba(3,199,90,0.12); color: var(--naver); }
+
+.sidebar-nav { padding: 8px 10px; flex: 1; overflow-y: auto; }
+
+.nav-section-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text3);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 10px 8px 4px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text2);
+  transition: all 0.15s;
+  margin-bottom: 1px;
+}
+
+.nav-item:hover { background: var(--bg3); color: var(--text); }
+.nav-item.active { background: var(--blue-dim); color: var(--blue); }
+.nav-item .icon { font-size: 15px; width: 18px; text-align: center; }
+.nav-item .badge-count {
+  margin-left: auto;
+  font-size: 10px;
+  background: var(--red-dim);
+  color: var(--red);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.sidebar-bottom {
+  padding: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.refresh-btn {
+  width: 100%;
+  padding: 9px;
+  background: var(--green-dim);
+  border: 1px solid rgba(0,214,143,0.2);
+  border-radius: var(--radius);
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all 0.15s;
+}
+
+.refresh-btn:hover { background: rgba(0,214,143,0.2); }
+.refresh-btn.loading { opacity: 0.6; cursor: wait; }
+
+.last-updated {
+  font-size: 10px;
+  color: var(--text3);
+  text-align: center;
+  margin-top: 7px;
+  font-family: var(--mono);
+}
+
+/* ── Main ── */
+.main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+
+.topbar {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.page-title { font-size: 16px; font-weight: 500; color: var(--text); flex: 1; }
+
+.search-wrap {
+  position: relative;
+  width: 240px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 12px 8px 34px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.search-input:focus { border-color: var(--border2); }
+.search-input::placeholder { color: var(--text3); }
+.search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 13px; color: var(--text3); }
+
+.filter-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.filter-chip {
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text2);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all 0.15s;
+}
+
+.filter-chip:hover { border-color: var(--border2); color: var(--text); }
+.filter-chip.active { background: var(--blue-dim); border-color: rgba(77,159,255,0.3); color: var(--blue); }
+
+.content { padding: 20px 24px; flex: 1; }
+
+/* ── Dashboard ── */
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.metric-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+}
+
+.metric-label { font-size: 11px; color: var(--text3); letter-spacing: 0.5px; margin-bottom: 8px; }
+.metric-value { font-size: 26px; font-weight: 700; font-family: var(--mono); }
+.metric-value.green { color: var(--green); }
+.metric-value.red { color: var(--red); }
+.metric-value.blue { color: var(--blue); }
+.metric-sub { font-size: 11px; color: var(--text3); margin-top: 4px; }
+
+/* ── Product Table ── */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text2);
+  letter-spacing: 0.3px;
+}
+
+.add-product-btn {
+  padding: 7px 14px;
+  background: var(--blue-dim);
+  border: 1px solid rgba(77,159,255,0.25);
+  border-radius: var(--radius);
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all 0.15s;
+}
+
+.add-product-btn:hover { background: rgba(77,159,255,0.2); }
+
+.table-wrap {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+table { width: 100%; border-collapse: collapse; }
+
+thead th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text3);
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg3);
+}
+
+tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+  cursor: pointer;
+}
+
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: var(--bg3); }
+
+tbody td {
+  padding: 11px 14px;
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.product-name-cell { max-width: 200px; }
+.product-name { font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.product-cat { font-size: 11px; color: var(--text3); margin-top: 1px; }
+
+.store-tag {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.store-tag.coupang { background: rgba(255,107,53,0.15); color: var(--coupang); }
+.store-tag.naver { background: rgba(3,199,90,0.12); color: var(--naver); }
+
+.price-cell { font-family: var(--mono); font-weight: 500; }
+.price-current { font-size: 13px; color: var(--text); }
+.price-avg { font-size: 11px; color: var(--text3); margin-top: 1px; }
+
+.trend-cell { width: 90px; }
+.mini-chart { width: 90px; height: 36px; }
+
+.diff-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-family: var(--mono);
+}
+
+.diff-badge.cheap { background: var(--green-dim); color: var(--green); }
+.diff-badge.expensive { background: var(--red-dim); color: var(--red); }
+.diff-badge.normal { background: var(--bg3); color: var(--text3); }
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 5px;
+}
+.status-dot.buy { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.status-dot.wait { background: var(--text3); }
+.status-dot.high { background: var(--red); }
+
+.alert-toggle {
+  width: 34px;
+  height: 18px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 9px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.alert-toggle::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--text3);
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: all 0.2s;
+}
+
+.alert-toggle.on { background: rgba(0,214,143,0.2); border-color: var(--green); }
+.alert-toggle.on::after { background: var(--green); left: 18px; }
+
+.action-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text2);
+  font-size: 11px;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all 0.15s;
+}
+
+.action-btn:hover { border-color: var(--border2); color: var(--text); }
+.action-btn.search-btn { color: var(--blue); border-color: rgba(77,159,255,0.2); background: var(--blue-dim); }
+.action-btn.search-btn:hover { background: rgba(77,159,255,0.2); }
+
+/* ── AI Search Panel ── */
+.ai-panel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.ai-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.ai-icon {
+  width: 28px;
+  height: 28px;
+  background: var(--blue-dim);
+  border: 1px solid rgba(77,159,255,0.2);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
+.ai-title { font-size: 13px; font-weight: 500; color: var(--text); }
+.ai-subtitle { font-size: 11px; color: var(--text3); margin-left: auto; }
+
+.ai-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.ai-input {
+  flex: 1;
+  padding: 9px 14px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.ai-input:focus { border-color: rgba(77,159,255,0.4); }
+.ai-input::placeholder { color: var(--text3); }
+
+.ai-search-btn {
+  padding: 9px 18px;
+  background: var(--blue);
+  border: none;
+  border-radius: var(--radius);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.ai-search-btn:hover { background: #6eadff; }
+.ai-search-btn:disabled { opacity: 0.5; cursor: wait; }
+
+.ai-result {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--bg3);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+  display: none;
+  white-space: pre-wrap;
+}
+
+.ai-result.visible { display: block; }
+
+.ai-add-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.ai-add-chip {
+  padding: 5px 12px;
+  background: var(--green-dim);
+  border: 1px solid rgba(0,214,143,0.2);
+  border-radius: 20px;
+  color: var(--green);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all 0.15s;
+}
+
+.ai-add-chip:hover { background: rgba(0,214,143,0.2); }
+
+/* ── Detail Modal ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(4px);
+  display: none;
+}
+
+.modal-overlay.open { display: flex; }
+
+.modal {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-lg);
+  width: 480px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.modal-title { font-size: 15px; font-weight: 500; color: var(--text); flex: 1; }
+.modal-close {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-body { padding: 16px 20px; }
+
+.detail-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.detail-stat {
+  background: var(--bg3);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.detail-stat-label { font-size: 11px; color: var(--text3); margin-bottom: 5px; }
+.detail-stat-value { font-size: 18px; font-weight: 700; font-family: var(--mono); color: var(--text); }
+
+.modal-chart-wrap { position: relative; height: 180px; margin-bottom: 16px; }
+
+.modal-form { display: flex; flex-direction: column; gap: 12px; }
+.form-label { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+.form-input, .form-select {
+  width: 100%;
+  padding: 9px 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+}
+
+.form-input:focus, .form-select:focus { border-color: rgba(77,159,255,0.4); }
+.form-select option { background: var(--bg3); }
+
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.modal-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.btn-cancel {
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text2);
+  font-size: 13px;
+  cursor: pointer;
+  font-family: var(--font);
+}
+
+.btn-primary {
+  padding: 8px 18px;
+  border-radius: var(--radius);
+  border: none;
+  background: var(--blue);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: var(--font);
+}
+
+.btn-danger {
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255,92,92,0.2);
+  background: var(--red-dim);
+  color: var(--red);
+  font-size: 13px;
+  cursor: pointer;
+  font-family: var(--font);
+  margin-right: auto;
+}
+
+/* ── Alert Notification ── */
+.notif-bar {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  background: var(--bg2);
+  border: 1px solid var(--green);
+  border-radius: var(--radius-lg);
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--green);
+  z-index: 200;
+  min-width: 260px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  transform: translateX(120%);
+  transition: transform 0.3s;
+}
+
+.notif-bar.show { transform: translateX(0); }
+
+/* ── Alerts Page ── */
+.alerts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.alert-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  transition: border-color 0.15s;
+}
+
+.alert-card.triggered {
+  border-color: var(--green);
+  background: linear-gradient(135deg, var(--bg2) 0%, rgba(0,214,143,0.04) 100%);
+}
+
+.alert-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.alert-card-name { font-size: 13px; font-weight: 500; color: var(--text); line-height: 1.4; flex: 1; margin-right: 8px; }
+.alert-threshold { font-size: 11px; color: var(--text3); margin-bottom: 8px; }
+
+.alert-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.alert-current-price { font-size: 18px; font-weight: 700; font-family: var(--mono); }
+.alert-current-price.triggered { color: var(--green); }
+.alert-avg-price { font-size: 12px; color: var(--text3); }
+
+.triggered-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--green);
+  background: var(--green-dim);
+  padding: 3px 9px;
+  border-radius: 20px;
+}
+
+/* ── Progress bar ── */
+.price-progress {
+  height: 4px;
+  background: var(--bg3);
+  border-radius: 2px;
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.price-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+.price-marker {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 10px;
+  background: var(--text3);
+  border-radius: 1px;
+}
+
+/* ── History page ── */
+.history-select {
+  padding: 7px 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+  margin-bottom: 16px;
+}
+
+.big-chart-wrap {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.big-chart-wrap h3 { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 14px; }
+.big-chart-inner { position: relative; height: 260px; }
+
+/* ── Loading spinner ── */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(77,159,255,0.2);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.category-badge {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: var(--bg3);
+  color: var(--text3);
+  border: 1px solid var(--border);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text3);
+}
+
+.empty-state-icon { font-size: 32px; margin-bottom: 10px; }
+.empty-state-text { font-size: 14px; }
+
+.page { display: none; }
+.page.active { display: block; }
+
+.api-key-banner {
+  background: var(--amber-dim);
+  border: 1px solid rgba(255,179,71,0.2);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--amber);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.api-key-input-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.api-key-field {
+  flex: 1;
+  padding: 7px 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--mono);
+  outline: none;
+}
+
+.api-key-save-btn {
+  padding: 7px 14px;
+  background: var(--amber-dim);
+  border: 1px solid rgba(255,179,71,0.25);
+  border-radius: var(--radius);
+  color: var(--amber);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: var(--font);
+}
+
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-title">가격 추적기</div>
+      <div class="logo-sub">PRICE TRACKER v2.0</div>
+      <div class="store-pills">
+        <span class="pill pill-coupang">쿠팡</span>
+        <span class="pill pill-naver">네이버스토어</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">메뉴</div>
+      <div class="nav-item active" onclick="showPage('dashboard')">
+        <span class="icon">📊</span> 대시보드
+      </div>
+      <div class="nav-item" onclick="showPage('products')">
+        <span class="icon">📦</span> 제품 목록
+        <span class="badge-count" id="nav-count">0</span>
+      </div>
+      <div class="nav-item" onclick="showPage('alerts')">
+        <span class="icon">🔔</span> 알림 현황
+        <span class="badge-count" id="nav-alert-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" onclick="showPage('history')">
+        <span class="icon">📈</span> 가격 히스토리
+      </div>
+      <div class="nav-section-label" style="margin-top:8px;">카테고리</div>
+      <div class="nav-item" onclick="filterCategory('전체')"><span class="icon">🔍</span> 전체</div>
+      <div class="nav-item" onclick="filterCategory('식품')"><span class="icon">🍱</span> 식품</div>
+      <div class="nav-item" onclick="filterCategory('생필품')"><span class="icon">🧴</span> 생필품</div>
+      <div class="nav-item" onclick="filterCategory('건강')"><span class="icon">💊</span> 건강/영양제</div>
+      <div class="nav-item" onclick="filterCategory('주방')"><span class="icon">🍳</span> 주방용품</div>
+      <div class="nav-item" onclick="filterCategory('음료')"><span class="icon">☕</span> 음료/커피</div>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <button class="refresh-btn" id="refresh-btn" onclick="refreshAllPrices()">
+        ↻ 가격 전체 업데이트
+      </button>
+      <div class="last-updated" id="last-updated">— 아직 업데이트 안 됨</div>
+    </div>
+  </aside>
+
+  <!-- ── Main Content ── -->
+  <main class="main">
+    <div class="topbar">
+      <div class="page-title" id="page-title">대시보드</div>
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input class="search-input" id="search-input" placeholder="제품 검색..." oninput="renderProducts()" />
+      </div>
+      <div class="filter-row">
+        <button class="filter-chip active" onclick="setSort('discount', this)">할인순</button>
+        <button class="filter-chip" onclick="setSort('name', this)">이름순</button>
+        <button class="filter-chip" onclick="setSort('price', this)">가격순</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- 대시보드 -->
+      <div id="page-dashboard" class="page active">
+        <div class="metrics-row">
+          <div class="metric-card">
+            <div class="metric-label">추적 제품 수</div>
+            <div class="metric-value blue" id="m-total">0</div>
+            <div class="metric-sub">개 제품</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">지금 저렴한 제품</div>
+            <div class="metric-value green" id="m-cheap">0</div>
+            <div class="metric-sub">개 → 지금 사세요</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">알림 발동</div>
+            <div class="metric-value red" id="m-triggered">0</div>
+            <div class="metric-sub">개 조건 달성</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">예상 절약 금액</div>
+            <div class="metric-value green" id="m-savings">₩0</div>
+            <div class="metric-sub">오늘 기준</div>
+          </div>
+        </div>
+
+        <div class="section-header">
+          <div class="section-title">지금 당장 사면 좋은 제품</div>
+        </div>
+        <div class="table-wrap" style="margin-bottom:20px;">
+          <table>
+            <thead>
+              <tr>
+                <th>제품명</th>
+                <th>쇼핑몰</th>
+                <th>현재가 / 평균가</th>
+                <th>30일 추이</th>
+                <th>할인율</th>
+                <th>상태</th>
+              </tr>
+            </thead>
+            <tbody id="dashboard-hot-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 제품 목록 -->
+      <div id="page-products" class="page">
+        <!-- AI 검색 패널 -->
+        <div class="ai-panel">
+          <div class="ai-panel-header">
+            <div class="ai-icon">✦</div>
+            <div class="ai-title">AI 가격 조회 & 제품 추가</div>
+            <div class="ai-subtitle">Claude AI로 실시간 가격 분석</div>
+          </div>
+
+          <div id="api-key-banner" class="api-key-banner">
+            ⚠️ Anthropic API 키를 입력하면 AI 자동 가격 분석이 활성화됩니다.
+            <div class="api-key-input-row">
+              <input class="api-key-field" id="api-key-input" type="password" placeholder="sk-ant-..." />
+              <button class="api-key-save-btn" onclick="saveApiKey()">저장</button>
+            </div>
+          </div>
+
+          <div class="ai-input-row">
+            <input class="ai-input" id="ai-query" placeholder="예: 비타민C 1000mg 가격 분석해줘 / 참치캔 쿠팡 vs 네이버 비교" />
+            <button class="ai-search-btn" id="ai-search-btn" onclick="aiSearch()">AI 분석 ✦</button>
+          </div>
+          <div class="ai-result" id="ai-result"></div>
+          <div id="ai-add-row" class="ai-add-row"></div>
+        </div>
+
+        <div class="section-header">
+          <div class="section-title" id="product-count-label">전체 제품 목록</div>
+          <button class="add-product-btn" onclick="openAddModal()">+ 직접 추가</button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:200px;">제품명</th>
+                <th>쇼핑몰</th>
+                <th>현재가 / 평균가</th>
+                <th>30일 추이</th>
+                <th>할인율</th>
+                <th>알림</th>
+                <th>액션</th>
+              </tr>
+            </thead>
+            <tbody id="products-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 알림 현황 -->
+      <div id="page-alerts" class="page">
+        <div class="alerts-grid" id="alerts-grid"></div>
+      </div>
+
+      <!-- 가격 히스토리 -->
+      <div id="page-history" class="page">
+        <select class="history-select" id="history-select" onchange="renderHistory()">
+          <option value="">제품을 선택하세요</option>
+        </select>
+        <div id="history-content">
+          <div class="empty-state">
+            <div class="empty-state-icon">📈</div>
+            <div class="empty-state-text">위에서 제품을 선택하면 30일 가격 추이를 볼 수 있습니다.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- 상세/추가 모달 -->
+<div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">제품 상세</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<!-- 알림 바 -->
+<div class="notif-bar" id="notif-bar"></div>
+
+<script>
+// ── 데이터 ──────────────────────────────────────────────
+let sortBy = 'discount';
+let filterCat = '전체';
+let anthropicApiKey = localStorage.getItem('anthropicApiKey') || '';
+let detailCharts = {};
+
+if (anthropicApiKey) {
+  document.getElementById('api-key-banner').style.display = 'none';
+}
+
+function generateHistory(avg, current, days = 30) {
+  const h = [];
+  let price = avg * (0.9 + Math.random() * 0.2);
+  for (let i = 0; i < days - 1; i++) {
+    price = price * (0.97 + Math.random() * 0.06);
+    price = Math.max(avg * 0.7, Math.min(avg * 1.3, price));
+    h.push(Math.round(price));
+  }
+  h.push(current);
+  return h;
+}
+
+// ── 제품 데이터 (50개+) ────────────────────────────────
+let products = [
+  // 식품
+  { id:1, name:'동원참치 라이트스탠다드 150g×8개', store:'coupang', category:'식품', currentPrice:9600, avgPrice:11200, threshold:10, alertOn:true },
+  { id:2, name:'햇반 즉석밥 210g×24개입', store:'coupang', category:'식품', currentPrice:19800, avgPrice:22000, threshold:10, alertOn:true },
+  { id:3, name:'신라면 120g×20봉', store:'naver', category:'식품', currentPrice:14500, avgPrice:15800, threshold:8, alertOn:false },
+  { id:4, name:'오뚜기 진라면 매운맛 120g×20봉', store:'naver', category:'식품', currentPrice:13200, avgPrice:14500, threshold:8, alertOn:false },
+  { id:5, name:'삼양 불닭볶음면 140g×20봉', store:'coupang', category:'식품', currentPrice:22000, avgPrice:21500, threshold:10, alertOn:false },
+  { id:6, name:'CJ 스팸 클래식 200g×6개', store:'coupang', category:'식품', currentPrice:18500, avgPrice:22000, threshold:12, alertOn:true },
+  { id:7, name:'오뚜기 참기름 160ml', store:'naver', category:'식품', currentPrice:4200, avgPrice:5500, threshold:10, alertOn:true },
+  { id:8, name:'청정원 순창 고추장 500g', store:'naver', category:'식품', currentPrice:6800, avgPrice:7500, threshold:10, alertOn:false },
+  { id:9, name:'CJ 해찬들 쌈장 500g', store:'coupang', category:'식품', currentPrice:3900, avgPrice:4300, threshold:10, alertOn:false },
+  { id:10, name:'롯데 쌀로별 1kg', store:'naver', category:'식품', currentPrice:2800, avgPrice:3200, threshold:10, alertOn:false },
+  { id:11, name:'진주햄 천년의맛 비엔나 320g', store:'coupang', category:'식품', currentPrice:4500, avgPrice:5200, threshold:10, alertOn:false },
+  { id:12, name:'오뚜기 케첩 300g', store:'naver', category:'식품', currentPrice:1900, avgPrice:2200, threshold:10, alertOn:false },
+  { id:13, name:'풀무원 두부 (찌개용) 300g×2개', store:'coupang', category:'식품', currentPrice:3400, avgPrice:3800, threshold:10, alertOn:false },
+  { id:14, name:'CJ 비비고 왕만두 560g', store:'coupang', category:'식품', currentPrice:6200, avgPrice:7800, threshold:12, alertOn:true },
+  { id:15, name:'하림 IFF 닭가슴살 100g×10개', store:'naver', category:'식품', currentPrice:13500, avgPrice:15000, threshold:10, alertOn:false },
+  { id:16, name:'청정원 맛술 900ml', store:'naver', category:'식품', currentPrice:3200, avgPrice:3800, threshold:10, alertOn:false },
+  { id:17, name:'오뚜기 마요네즈 500g', store:'coupang', category:'식품', currentPrice:3100, avgPrice:3500, threshold:10, alertOn:false },
+  { id:18, name:'CJ 다시다 쇠고기 500g', store:'naver', category:'식품', currentPrice:7200, avgPrice:8500, threshold:10, alertOn:true },
+
+  // 음료/커피
+  { id:19, name:'스타벅스 VIA 인스턴트 콜롬비아 26개입', store:'coupang', category:'음료', currentPrice:15800, avgPrice:18000, threshold:10, alertOn:true },
+  { id:20, name:'맥심 모카골드 마일드 180개입', store:'naver', category:'음료', currentPrice:28000, avgPrice:32000, threshold:12, alertOn:true },
+  { id:21, name:'동서 맥심 TOP 캔 275ml×30개', store:'coupang', category:'음료', currentPrice:23000, avgPrice:26000, threshold:10, alertOn:false },
+  { id:22, name:'티젠 보이차 티백 100개', store:'naver', category:'음료', currentPrice:8500, avgPrice:9800, threshold:10, alertOn:false },
+  { id:23, name:'코카콜라 250ml×30캔', store:'coupang', category:'음료', currentPrice:18500, avgPrice:22000, threshold:12, alertOn:true },
+  { id:24, name:'제주삼다수 2L×12개', store:'naver', category:'음료', currentPrice:11500, avgPrice:13200, threshold:10, alertOn:false },
+  { id:25, name:'포카리스웨트 500ml×20개', store:'coupang', category:'음료', currentPrice:22000, avgPrice:25000, threshold:10, alertOn:false },
+
+  // 생필품
+  { id:26, name:'퍼실 파워젤 세탁세제 3kg', store:'coupang', category:'생필품', currentPrice:14200, avgPrice:18500, threshold:15, alertOn:true },
+  { id:27, name:'다우니 섬유유연제 퍼플 5.1L', store:'naver', category:'생필품', currentPrice:18800, avgPrice:22000, threshold:12, alertOn:true },
+  { id:28, name:'유한락스 후레쉬 800ml×6개', store:'coupang', category:'생필품', currentPrice:7800, avgPrice:9200, threshold:10, alertOn:false },
+  { id:29, name:'스카트 주방세제 700ml×6개', store:'naver', category:'생필품', currentPrice:9500, avgPrice:11000, threshold:10, alertOn:false },
+  { id:30, name:'크리넥스 미용티슈 230매×6개', store:'coupang', category:'생필품', currentPrice:8200, avgPrice:9800, threshold:10, alertOn:true },
+  { id:31, name:'뽀삐 롤화장지 30롤', store:'naver', category:'생필품', currentPrice:14500, avgPrice:17000, threshold:12, alertOn:true },
+  { id:32, name:'고려은단 비타민C 500정', store:'coupang', category:'건강', currentPrice:12800, avgPrice:15200, threshold:10, alertOn:true },
+  { id:33, name:'락토핏 골드 유산균 60포', store:'naver', category:'건강', currentPrice:22000, avgPrice:26000, threshold:12, alertOn:true },
+  { id:34, name:'자이리톨 껌 28g×20개', store:'coupang', category:'생필품', currentPrice:12000, avgPrice:13500, threshold:8, alertOn:false },
+  { id:35, name:'오랄비 전동칫솔 리필 4개', store:'naver', category:'생필품', currentPrice:8500, avgPrice:10000, threshold:10, alertOn:false },
+  { id:36, name:'도루코 터치3 면도기 12개', store:'coupang', category:'생필품', currentPrice:7200, avgPrice:8800, threshold:10, alertOn:false },
+  { id:37, name:'아모레 케라시스 샴푸 1500ml', store:'naver', category:'생필품', currentPrice:8900, avgPrice:10500, threshold:10, alertOn:false },
+  { id:38, name:'LG 엘라스틴 린스 1500ml', store:'coupang', category:'생필품', currentPrice:8200, avgPrice:9800, threshold:10, alertOn:false },
+  { id:39, name:'죠이 주방세제 1kg', store:'naver', category:'생필품', currentPrice:4500, avgPrice:5500, threshold:10, alertOn:false },
+  { id:40, name:'3M 스카치브라이트 수세미 10개', store:'coupang', category:'생필품', currentPrice:5800, avgPrice:7000, threshold:10, alertOn:false },
+  { id:41, name:'일회용 지퍼백 대형 50매', store:'naver', category:'생필품', currentPrice:4200, avgPrice:5000, threshold:10, alertOn:false },
+  { id:42, name:'다회용 비닐장갑 200매', store:'coupang', category:'생필품', currentPrice:3800, avgPrice:4500, threshold:10, alertOn:false },
+
+  // 건강
+  { id:43, name:'종근당 오메가3 EPA&DHA 100캡슐', store:'coupang', category:'건강', currentPrice:19500, avgPrice:23000, threshold:12, alertOn:true },
+  { id:44, name:'뉴트리코어 마그네슘 1000mg 60정', store:'naver', category:'건강', currentPrice:12000, avgPrice:14500, threshold:10, alertOn:false },
+  { id:45, name:'정관장 홍삼정 에브리타임 10ml×30포', store:'coupang', category:'건강', currentPrice:42000, avgPrice:52000, threshold:15, alertOn:true },
+  { id:46, name:'칼라만시 분말 500g', store:'naver', category:'건강', currentPrice:15000, avgPrice:18000, threshold:10, alertOn:false },
+  { id:47, name:'프로바이오틱스 유산균 60캡슐', store:'coupang', category:'건강', currentPrice:18000, avgPrice:21000, threshold:12, alertOn:true },
+
+  // 주방용품
+  { id:48, name:'지퍼락 프리저 백 대형 25매', store:'naver', category:'주방', currentPrice:5800, avgPrice:7000, threshold:10, alertOn:false },
+  { id:49, name:'쿠첸 압력밥솥 6인용', store:'coupang', category:'주방', currentPrice:85000, avgPrice:110000, threshold:15, alertOn:true },
+  { id:50, name:'테팔 프라이팬 28cm 인덕션', store:'naver', category:'주방', currentPrice:38000, avgPrice:48000, threshold:15, alertOn:true },
+  { id:51, name:'글라스락 밀폐용기 세트 10pcs', store:'coupang', category:'주방', currentPrice:22000, avgPrice:28000, threshold:12, alertOn:false },
+  { id:52, name:'옥션 키친타올 150매×4개', store:'naver', category:'주방', currentPrice:8500, avgPrice:10000, threshold:10, alertOn:false },
+  { id:53, name:'코렐 접시 세트 6인', store:'coupang', category:'주방', currentPrice:32000, avgPrice:42000, threshold:15, alertOn:true },
+];
+
+// 히스토리 생성
+products.forEach(p => {
+  p.history = generateHistory(p.avgPrice, p.currentPrice);
+});
+
+// ── 유틸 ──────────────────────────────────────────────
+function discountPct(p) { return Math.round((1 - p.currentPrice / p.avgPrice) * 100); }
+function isCheap(p) { return discountPct(p) >= p.threshold; }
+function fmt(n) { return '₩' + n.toLocaleString(); }
+
+function storeTag(s) {
+  if (s === 'coupang') return '<span class="store-tag coupang">쿠팡</span>';
+  if (s === 'naver') return '<span class="store-tag naver">네이버</span>';
+  return '<span class="store-tag coupang">쿠팡+네이버</span>';
+}
+
+function diffBadge(p) {
+  const d = discountPct(p);
+  if (d >= p.threshold) return `<span class="diff-badge cheap">-${d}%</span>`;
+  if (d > 0) return `<span class="diff-badge normal">-${d}%</span>`;
+  if (d < 0) return `<span class="diff-badge expensive">+${Math.abs(d)}%</span>`;
+  return `<span class="diff-badge normal">0%</span>`;
+}
+
+function statusCell(p) {
+  if (isCheap(p)) return '<span class="status-dot buy"></span>지금 사세요';
+  if (discountPct(p) > 0) return '<span class="status-dot wait"></span>관망';
+  return '<span class="status-dot high"></span>비쌈';
+}
+
+function barColor(p) {
+  const d = discountPct(p);
+  if (d >= p.threshold) return '#00d68f';
+  if (d > 0) return '#4d9fff';
+  return '#ff5c5c';
+}
+
+// ── 렌더 ──────────────────────────────────────────────
+function getFilteredProducts() {
+  let list = [...products];
+  const q = document.getElementById('search-input').value.toLowerCase();
+  if (q) list = list.filter(p => p.name.toLowerCase().includes(q));
+  if (filterCat !== '전체') list = list.filter(p => p.category === filterCat);
+  if (sortBy === 'discount') list.sort((a,b) => discountPct(b) - discountPct(a));
+  else if (sortBy === 'price') list.sort((a,b) => a.currentPrice - b.currentPrice);
+  else list.sort((a,b) => a.name.localeCompare(b.name, 'ko'));
+  return list;
+}
+
+function productRow(p, showAlert = true) {
+  const d = discountPct(p);
+  const barPct = Math.round(Math.max(5, Math.min(95, (p.currentPrice - Math.min(...p.history)) / (Math.max(...p.history) - Math.min(...p.history)) * 100)));
+  return `<tr onclick="openDetailModal(${p.id})">
+    <td class="product-name-cell">
+      <div class="product-name">${p.name}</div>
+      <div class="product-cat">${p.category}</div>
+    </td>
+    <td>${storeTag(p.store)}</td>
+    <td class="price-cell">
+      <div class="price-current">${fmt(p.currentPrice)}</div>
+      <div class="price-avg">평균 ${fmt(p.avgPrice)}</div>
+    </td>
+    <td class="trend-cell">
+      <canvas class="mini-chart" id="mini-${p.id}"></canvas>
+    </td>
+    <td>${diffBadge(p)}</td>
+    ${showAlert ? `<td><div class="alert-toggle ${p.alertOn?'on':''}" onclick="event.stopPropagation();toggleAlert(${p.id})"></div></td>` : ''}
+    <td>
+      <button class="action-btn search-btn" onclick="event.stopPropagation();aiSearchProduct(${p.id})">AI 조회</button>
+    </td>
+  </tr>`;
+}
+
+function renderMiniCharts(list) {
+  list.forEach(p => {
+    const canvas = document.getElementById('mini-' + p.id);
+    if (!canvas) return;
+    if (detailCharts['mini-'+p.id]) { detailCharts['mini-'+p.id].destroy(); }
+    const color = barColor(p);
+    detailCharts['mini-'+p.id] = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: p.history.map((_,i) => i),
+        datasets: [{ data: p.history, borderColor: color, borderWidth: 2, pointRadius: 0, fill: false, tension: 0.4 }]
+      },
+      options: {
+        responsive: false, animation: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: { x: { display: false }, y: { display: false } }
+      }
+    });
+  });
+}
+
+function renderDashboard() {
+  const cheap = products.filter(isCheap);
+  const triggered = products.filter(p => p.alertOn && isCheap(p));
+  const savings = cheap.reduce((s,p) => s + Math.max(0, p.avgPrice - p.currentPrice), 0);
+
+  document.getElementById('m-total').textContent = products.length;
+  document.getElementById('m-cheap').textContent = cheap.length;
+  document.getElementById('m-triggered').textContent = triggered.length;
+  document.getElementById('m-savings').textContent = fmt(savings);
+
+  const hotList = [...products].sort((a,b) => discountPct(b) - discountPct(a)).slice(0, 8).filter(p => discountPct(p) > 0);
+  document.getElementById('dashboard-hot-tbody').innerHTML = hotList.map(p =>
+    `<tr onclick="openDetailModal(${p.id})">
+      <td class="product-name-cell"><div class="product-name">${p.name}</div><div class="product-cat">${p.category}</div></td>
+      <td>${storeTag(p.store)}</td>
+      <td class="price-cell"><div class="price-current">${fmt(p.currentPrice)}</div><div class="price-avg">평균 ${fmt(p.avgPrice)}</div></td>
+      <td class="trend-cell"><canvas class="mini-chart" id="dash-mini-${p.id}"></canvas></td>
+      <td>${diffBadge(p)}</td>
+      <td>${statusCell(p)}</td>
+    </tr>`
+  ).join('');
+
+  setTimeout(() => {
+    hotList.forEach(p => {
+      const canvas = document.getElementById('dash-mini-' + p.id);
+      if (!canvas) return;
+      const color = barColor(p);
+      new Chart(canvas, {
+        type: 'line',
+        data: { labels: p.history.map((_,i) => i), datasets: [{ data: p.history, borderColor: color, borderWidth: 2, pointRadius: 0, fill: false, tension: 0.4 }] },
+        options: { responsive: false, animation: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false } } }
+      });
+    });
+  }, 50);
+
+  const alertCount = triggered.length;
+  const navAlertBadge = document.getElementById('nav-alert-count');
+  navAlertBadge.style.display = alertCount > 0 ? 'inline' : 'none';
+  navAlertBadge.textContent = alertCount;
+  document.getElementById('nav-count').textContent = products.length;
+}
+
+function renderProducts() {
+  const list = getFilteredProducts();
+  document.getElementById('product-count-label').textContent = `전체 제품 목록 (${list.length}개)`;
+  document.getElementById('products-tbody').innerHTML = list.map(p => productRow(p)).join('');
+  setTimeout(() => renderMiniCharts(list), 50);
+}
+
+function renderAlerts() {
+  const el = document.getElementById('alerts-grid');
+  if (products.length === 0) { el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔔</div><div class="empty-state-text">추적 중인 제품이 없습니다.</div></div>'; return; }
+
+  el.innerHTML = products.map(p => {
+    const triggered = p.alertOn && isCheap(p);
+    const d = discountPct(p);
+    const min = Math.min(...p.history), max = Math.max(...p.history);
+    const barW = Math.round(Math.max(5, Math.min(95, (p.currentPrice - min) / (max - min) * 100)));
+    const avgW = Math.round(Math.max(5, Math.min(95, (p.avgPrice - min) / (max - min) * 100)));
+    return `<div class="alert-card ${triggered ? 'triggered' : ''}">
+      <div class="alert-card-top">
+        <div class="alert-card-name">${p.name}</div>
+        <div class="alert-toggle ${p.alertOn ? 'on' : ''}" onclick="toggleAlert(${p.id})"></div>
+      </div>
+      <div class="alert-threshold">${storeTag(p.store)} · 알림 조건: 평균 대비 ${p.threshold}% 이하</div>
+      <div class="alert-price-row">
+        <div class="alert-current-price ${triggered ? 'triggered' : ''}">${fmt(p.currentPrice)}</div>
+        <div class="alert-avg-price">/ 평균 ${fmt(p.avgPrice)}</div>
+      </div>
+      <div class="price-progress">
+        <div class="price-progress-fill" style="width:${barW}%;background:${barColor(p)}"></div>
+        <div class="price-marker" style="left:${avgW}%"></div>
+      </div>
+      ${triggered ? `<div class="triggered-label">✓ 조건 달성! ${d}% 저렴</div>` : `<div style="font-size:11px;color:var(--text3);">현재 ${d > 0 ? '-'+d+'%' : d < 0 ? '+'+Math.abs(d)+'%' : '평균'} · 목표까지 ${Math.max(0,p.threshold - d)}% 남음</div>`}
+    </div>`;
+  }).join('');
+}
+
+function renderHistory() {
+  const sel = document.getElementById('history-select');
+  const id = parseInt(sel.value);
+  const el = document.getElementById('history-content');
+  if (!id) { el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📈</div><div class="empty-state-text">위에서 제품을 선택하면 30일 가격 추이를 볼 수 있습니다.</div></div>'; return; }
+  const p = products.find(x => x.id === id);
+  if (!p) return;
+
+  const days = Array.from({length:30}, (_,i) => { const d = new Date(); d.setDate(d.getDate()-29+i); return `${d.getMonth()+1}/${d.getDate()}`; });
+  const min30 = Math.min(...p.history), max30 = Math.max(...p.history);
+  const d = discountPct(p);
+
+  el.innerHTML = `
+    <div class="big-chart-wrap">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+        <div>
+          <h3>${p.name}</h3>
+          <div style="font-size:12px;color:var(--text3);margin-top:3px;">${storeTag(p.store)} · ${p.category}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:20px;font-weight:700;font-family:var(--mono);color:${barColor(p)};">${fmt(p.currentPrice)}</div>
+          <div style="font-size:12px;color:var(--text3);">평균 ${fmt(p.avgPrice)} · ${d > 0 ? '-'+d+'% 저렴' : d < 0 ? '+'+Math.abs(d)+'% 비쌈' : '평균가'}</div>
+        </div>
+      </div>
+      <div class="big-chart-inner"><canvas id="big-chart"></canvas></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+      <div class="metric-card"><div class="metric-label">30일 최저가</div><div class="metric-value green" style="font-size:18px;">${fmt(min30)}</div></div>
+      <div class="metric-card"><div class="metric-label">30일 최고가</div><div class="metric-value red" style="font-size:18px;">${fmt(max30)}</div></div>
+      <div class="metric-card"><div class="metric-label">평균가</div><div class="metric-value blue" style="font-size:18px;">${fmt(p.avgPrice)}</div></div>
+      <div class="metric-card"><div class="metric-label">현재 할인율</div><div class="metric-value ${d > 0 ? 'green' : d < 0 ? 'red' : ''}" style="font-size:18px;">${d > 0 ? '-'+d+'%' : d < 0 ? '+'+Math.abs(d)+'%' : '0%'}</div></div>
+    </div>
+  `;
+
+  setTimeout(() => {
+    if (detailCharts['big']) detailCharts['big'].destroy();
+    const ctx = document.getElementById('big-chart');
+    if (!ctx) return;
+    detailCharts['big'] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: days,
+        datasets: [
+          { label: '실제 가격', data: p.history, borderColor: barColor(p), backgroundColor: barColor(p)+'22', fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: barColor(p) },
+          { label: '평균가', data: Array(30).fill(p.avgPrice), borderColor: '#555b6e', borderDash: [5,4], pointRadius: 0, borderWidth: 1.5 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => fmt(c.raw) } } },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#555b6e', font: { size: 11 }, maxTicksLimit: 10 } },
+          y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#555b6e', font: { size: 11 }, callback: v => '₩'+v.toLocaleString() } }
+        }
+      }
+    });
+  }, 50);
+}
+
+function updateHistorySelect() {
+  const sel = document.getElementById('history-select');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">제품을 선택하세요</option>' + products.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  if (cur) sel.value = cur;
+}
+
+// ── 페이지 전환 ──────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  const titles = { dashboard:'대시보드', products:'제품 목록', alerts:'알림 현황', history:'가격 히스토리' };
+  document.getElementById('page-title').textContent = titles[name] || '';
+  if (name === 'products') renderProducts();
+  else if (name === 'alerts') renderAlerts();
+  else if (name === 'history') { updateHistorySelect(); renderHistory(); }
+  else renderDashboard();
+}
+
+function filterCategory(cat) {
+  filterCat = cat;
+  showPage('products');
+}
+
+function setSort(s, el) {
+  sortBy = s;
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderProducts();
+}
+
+// ── 알림 토글 ──────────────────────────────────────
+function toggleAlert(id) {
+  const p = products.find(x => x.id === id);
+  if (p) { p.alertOn = !p.alertOn; renderAll(); }
+}
+
+function renderAll() {
+  renderDashboard();
+  const active = document.querySelector('.page.active');
+  if (active && active.id === 'page-products') renderProducts();
+  if (active && active.id === 'page-alerts') renderAlerts();
+}
+
+// ── 가격 업데이트 시뮬레이션 ──────────────────────────
+function refreshAllPrices() {
+  const btn = document.getElementById('refresh-btn');
+  btn.classList.add('loading');
+  btn.innerHTML = '<span class="spinner"></span>업데이트 중...';
+  setTimeout(() => {
+    products.forEach(p => {
+      const change = (Math.random() - 0.48) * 0.06;
+      p.currentPrice = Math.round(p.currentPrice * (1 + change));
+      p.currentPrice = Math.max(Math.round(p.avgPrice * 0.6), Math.min(Math.round(p.avgPrice * 1.4), p.currentPrice));
+      p.history.shift();
+      p.history.push(p.currentPrice);
+    });
+    const now = new Date();
+    document.getElementById('last-updated').textContent = `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} 업데이트`;
+    btn.classList.remove('loading');
+    btn.innerHTML = '↻ 가격 전체 업데이트';
+    renderAll();
+    updateHistorySelect();
+
+    const triggered = products.filter(p => p.alertOn && isCheap(p));
+    if (triggered.length > 0) {
+      showNotif(`🔔 ${triggered[0].name} - 지금 ${discountPct(triggered[0])}% 저렴!`);
+    }
+  }, 1800);
+}
+
+// ── 알림 바 ──────────────────────────────────────────
+function showNotif(msg) {
+  const bar = document.getElementById('notif-bar');
+  bar.textContent = msg;
+  bar.classList.add('show');
+  setTimeout(() => bar.classList.remove('show'), 4000);
+}
+
+// ── 상세 모달 ─────────────────────────────────────────
+function openDetailModal(id) {
+  const p = products.find(x => x.id === id);
+  if (!p) return;
+  const d = discountPct(p);
+  const min30 = Math.min(...p.history), max30 = Math.max(...p.history);
+
+  document.getElementById('modal-title').textContent = p.name;
+  document.getElementById('modal-body').innerHTML = `
+    <div style="margin-bottom:12px;">${storeTag(p.store)} <span class="category-badge">${p.category}</span></div>
+    <div class="detail-row">
+      <div class="detail-stat"><div class="detail-stat-label">현재가</div><div class="detail-stat-value" style="color:${barColor(p)}">${fmt(p.currentPrice)}</div></div>
+      <div class="detail-stat"><div class="detail-stat-label">평균가</div><div class="detail-stat-value">${fmt(p.avgPrice)}</div></div>
+      <div class="detail-stat"><div class="detail-stat-label">30일 최저</div><div class="detail-stat-value" style="color:var(--green)">${fmt(min30)}</div></div>
+      <div class="detail-stat"><div class="detail-stat-label">30일 최고</div><div class="detail-stat-value" style="color:var(--red)">${fmt(max30)}</div></div>
+    </div>
+    <div class="modal-chart-wrap"><canvas id="modal-chart"></canvas></div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px;">알림 조건: 평균가 대비 <strong style="color:var(--text)">${p.threshold}%</strong> 이하 · 현재 ${d > 0 ? '<span style=color:var(--green)>'+d+'% 저렴 ✓</span>' : d < 0 ? '<span style=color:var(--red)>'+Math.abs(d)+'% 비쌈</span>' : '평균가'}</div>
+  `;
+  document.getElementById('modal-footer').innerHTML = `
+    <button class="btn-danger" onclick="deleteProduct(${p.id})">삭제</button>
+    <button class="btn-cancel" onclick="closeModal()">닫기</button>
+    <button class="btn-primary" onclick="toggleAlert(${p.id});closeModal();">${p.alertOn ? '알림 끄기' : '알림 켜기'}</button>
+  `;
+  document.getElementById('modal-overlay').classList.add('open');
+
+  setTimeout(() => {
+    if (detailCharts['modal']) detailCharts['modal'].destroy();
+    const ctx = document.getElementById('modal-chart');
+    if (!ctx) return;
+    const days = Array.from({length:30}, (_,i) => { const d = new Date(); d.setDate(d.getDate()-29+i); return `${d.getMonth()+1}/${d.getDate()}`; });
+    detailCharts['modal'] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: days,
+        datasets: [
+          { data: p.history, borderColor: barColor(p), backgroundColor: barColor(p)+'22', fill: true, tension: 0.3, pointRadius: 2, pointBackgroundColor: barColor(p) },
+          { data: Array(30).fill(p.avgPrice), borderColor: '#555b6e', borderDash: [4,3], pointRadius: 0, borderWidth: 1.5 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => fmt(c.raw) } } },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#555b6e', font: { size: 10 }, maxTicksLimit: 8 } },
+          y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#555b6e', font: { size: 10 }, callback: v => '₩'+v.toLocaleString() } }
+        }
+      }
+    });
+  }, 50);
+}
+
+function openAddModal() {
+  document.getElementById('modal-title').textContent = '제품 직접 추가';
+  document.getElementById('modal-body').innerHTML = `
+    <div class="modal-form">
+      <div><div class="form-label">제품명</div><input class="form-input" id="f-name" placeholder="예: 신라면 120g×20봉" /></div>
+      <div class="form-row">
+        <div><div class="form-label">쇼핑몰</div><select class="form-select" id="f-store"><option value="coupang">쿠팡</option><option value="naver">네이버스토어</option></select></div>
+        <div><div class="form-label">카테고리</div><select class="form-select" id="f-cat"><option>식품</option><option>생필품</option><option>건강</option><option>음료</option><option>주방</option></select></div>
+      </div>
+      <div class="form-row">
+        <div><div class="form-label">현재 가격 (₩)</div><input class="form-input" id="f-price" type="number" placeholder="15000" /></div>
+        <div><div class="form-label">알림 기준 (%)</div><select class="form-select" id="f-threshold"><option value="5">5% 이하</option><option value="8">8% 이하</option><option value="10" selected>10% 이하</option><option value="12">12% 이하</option><option value="15">15% 이하</option><option value="20">20% 이하</option></select></div>
+      </div>
+    </div>
+  `;
+  document.getElementById('modal-footer').innerHTML = `
+    <button class="btn-cancel" onclick="closeModal()">취소</button>
+    <button class="btn-primary" onclick="saveNewProduct()">추가하기</button>
+  `;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function saveNewProduct() {
+  const name = document.getElementById('f-name').value.trim();
+  const price = parseInt(document.getElementById('f-price').value);
+  if (!name || !price) { alert('제품명과 가격을 입력해주세요.'); return; }
+  const avg = Math.round(price * (1.05 + Math.random() * 0.2));
+  const newId = Math.max(...products.map(p=>p.id)) + 1;
+  products.push({
+    id: newId,
+    name,
+    store: document.getElementById('f-store').value,
+    category: document.getElementById('f-cat').value,
+    currentPrice: price,
+    avgPrice: avg,
+    threshold: parseInt(document.getElementById('f-threshold').value),
+    alertOn: false,
+    history: generateHistory(avg, price)
+  });
+  closeModal();
+  renderAll();
+  updateHistorySelect();
+  showNotif(`✓ "${name}" 추가 완료`);
+}
+
+function deleteProduct(id) {
+  if (!confirm('이 제품을 목록에서 삭제할까요?')) return;
+  products = products.filter(p => p.id !== id);
+  closeModal();
+  renderAll();
+  updateHistorySelect();
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+// ── AI 검색 ──────────────────────────────────────────
+function saveApiKey() {
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key.startsWith('sk-ant-')) { alert('올바른 Anthropic API 키를 입력해주세요 (sk-ant-로 시작).'); return; }
+  anthropicApiKey = key;
+  localStorage.setItem('anthropicApiKey', key);
+  document.getElementById('api-key-banner').style.display = 'none';
+  showNotif('✓ API 키 저장 완료! AI 분석이 활성화되었습니다.');
+}
+
+async function aiSearch() {
+  const query = document.getElementById('ai-query').value.trim();
+  if (!query) return;
+
+  const resultEl = document.getElementById('ai-result');
+  const btn = document.getElementById('ai-search-btn');
+  resultEl.innerHTML = '<span class="spinner"></span>AI 분석 중...';
+  resultEl.classList.add('visible');
+  document.getElementById('ai-add-row').innerHTML = '';
+  btn.disabled = true;
+
+  const productContext = products.slice(0, 15).map(p =>
+    `${p.name} (${p.store === 'coupang' ? '쿠팡' : '네이버'}, 현재 ${p.currentPrice.toLocaleString()}원, 평균 ${p.avgPrice.toLocaleString()}원, ${discountPct(p)}% 차이)`
+  ).join('\n');
+
+  const systemPrompt = `당신은 한국 쇼핑 가격 분석 전문가입니다. 사용자의 쿠팡/네이버스토어 가격 추적을 도와주세요.
+
+현재 추적 중인 제품 목록 (일부):
+${productContext}
+
+다음을 수행하세요:
+1. 사용자 질문에 대해 구체적인 가격 분석 조언을 해주세요
+2. 추천 구매 시기나 전략을 제안하세요
+3. 만약 새 제품 추가가 필요하다면, 응답 마지막에 다음 형식으로 명시하세요:
+[추가제안] 제품명|쇼핑몰(coupang/naver)|예상가격(숫자만)|카테고리
+
+한국어로 답변하고, 실용적이고 간결하게 작성하세요.`;
+
+  try {
+    if (!anthropicApiKey) {
+      // API 키 없을 때 시뮬레이션
+      await new Promise(r => setTimeout(r, 1200));
+      const matched = products.filter(p => query.includes(p.name.split(' ')[0]) || p.name.includes(query.split(' ')[0]));
+      let response = `📊 "${query}" 분석 결과\n\n`;
+      if (matched.length > 0) {
+        matched.forEach(p => {
+          const d = discountPct(p);
+          response += `• ${p.name}\n  현재가: ${fmt(p.currentPrice)} / 평균가: ${fmt(p.avgPrice)}\n  ${d > 0 ? `✅ 지금 ${d}% 저렴 — 구매 추천!` : d < 0 ? `⚠️ 평균보다 ${Math.abs(d)}% 비쌈 — 대기 권장` : '평균가 수준'}\n\n`;
+        });
+      } else {
+        response += `${query}와 관련된 추적 제품이 없습니다.\n\n`;
+        response += `💡 팁: API 키를 입력하면 Claude AI가 실시간으로 더 정확한 분석을 제공합니다.\n\n`;
+        response += `[추가제안] ${query}|coupang|12000|식품`;
+      }
+      resultEl.textContent = response;
+      parseAiSuggestions(response);
+    } else {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicApiKey, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: query }]
+        })
+      });
+      const data = await res.json();
+      const text = data.content?.[0]?.text || '분석 실패';
+      resultEl.textContent = text;
+      parseAiSuggestions(text);
+    }
+  } catch(e) {
+    resultEl.textContent = '오류가 발생했습니다. 다시 시도해주세요.';
+  }
+  btn.disabled = false;
+}
+
+async function aiSearchProduct(id) {
+  const p = products.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('ai-query').value = `${p.name} 가격 분석해줘. 지금 사는 게 좋을까?`;
+  showPage('products');
+  aiSearch();
+}
+
+function parseAiSuggestions(text) {
+  const matches = [...text.matchAll(/\[추가제안\]\s*([^|]+)\|([^|]+)\|([^|]+)\|([^\n]+)/g)];
+  const row = document.getElementById('ai-add-row');
+  if (matches.length === 0) { row.innerHTML = ''; return; }
+  row.innerHTML = matches.map((m, i) => {
+    const [, name, store, price, category] = m;
+    return `<button class="ai-add-chip" onclick="addFromAI('${name.trim()}','${store.trim()}','${price.trim()}','${category.trim()}')">+ ${name.trim()} 추가</button>`;
+  }).join('');
+}
+
+function addFromAI(name, store, price, category) {
+  const numPrice = parseInt(price.replace(/[^0-9]/g,'')) || 10000;
+  const avg = Math.round(numPrice * (1.1 + Math.random() * 0.15));
+  const newId = Math.max(...products.map(p=>p.id)) + 1;
+  products.push({ id: newId, name, store: store === 'naver' ? 'naver' : 'coupang', category, currentPrice: numPrice, avgPrice: avg, threshold: 10, alertOn: false, history: generateHistory(avg, numPrice) });
+  renderAll();
+  updateHistorySelect();
+  document.getElementById('ai-add-row').innerHTML = '';
+  showNotif(`✓ "${name}" 목록에 추가됨`);
+}
+
+// ── 초기화 ────────────────────────────────────────────
+renderDashboard();
+updateHistorySelect();
+
+// 30초마다 자동 가격 변동 시뮬레이션
+setInterval(() => {
+  products.forEach(p => {
+    if (Math.random() < 0.3) {
+      const delta = Math.round(p.avgPrice * (Math.random() - 0.49) * 0.03);
+      p.currentPrice = Math.max(Math.round(p.avgPrice * 0.65), Math.min(Math.round(p.avgPrice * 1.35), p.currentPrice + delta));
+      p.history[p.history.length - 1] = p.currentPrice;
+    }
+  });
+  const active = document.querySelector('.page.active');
+  if (active && active.id === 'page-dashboard') renderDashboard();
+  if (active && active.id === 'page-alerts') renderAlerts();
+}, 30000);
+</script>
+</body>
+</html>
